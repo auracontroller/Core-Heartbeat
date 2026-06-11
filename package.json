@@ -1,0 +1,10 @@
+{
+  "name": "core-heartbeat",
+  "version": "1.0.0",
+  "description": "Core heartbeat relay module",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}
