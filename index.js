@@ -4,10 +4,22 @@ import Heartbeat from './Heartbeat.js';
 // The system tag
 const BOOT_TAG = 'SYS_BOOT_123';
 
+// Simulate failure state externally to prove asynchronous health checks
+let simulateFailure = false;
+
 // A mock transmit function
 const transmit = async (port, data) => {
     // console.log(`[Network] Transmitting to port ${port}:`, data);
-    return true; // Always return true for ping in this mock
+
+    // Simulate network latency
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Simulate failure specifically for PHYSICS_ENGINE
+    if (simulateFailure && port === 8081 && data.action === 'health_ping') {
+        throw new Error("Network timeout");
+    }
+
+    return true; // Return true for a successful pong
 };
 
 // 1. Initialize the CoreRelay
@@ -27,16 +39,13 @@ const heartbeat = new Heartbeat(core);
 heartbeat.start();
 
 console.log('Engine is running. The heartbeat is driving the metronome.');
-console.log('Wait 5 seconds, then we will simulate a silent module...');
+console.log('Wait 3 seconds, then we will simulate a network failure on PHYSICS_ENGINE...');
 
 setTimeout(() => {
-    // Simulate a module going silent
-    const physicsData = core.modules.get('PHYSICS_ENGINE');
-    if (physicsData) {
-        console.log('\n--- SIMULATING: PHYSICS_ENGINE goes SILENT ---');
-        physicsData.state = 'SILENT';
-    }
-}, 5000);
+    // The Core's background transmit loop will catch this asynchronously
+    console.log('\n--- SIMULATING: Disconnecting PHYSICS_ENGINE from network ---');
+    simulateFailure = true;
+}, 3000);
 
 setTimeout(() => {
     // Simulate user pressing enter on stdin to break the program without testing full intervention

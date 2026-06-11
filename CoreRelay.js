@@ -28,44 +28,74 @@ class CoreRelay {
 
     /**
      * Heartbeat strike handler. Proves the core is alive and pushes data forward.
+     * Volunteers any module status data independently gathered since the last beat.
      */
     receivePing() {
         this.pulse(); // Translate external strike into internal clock cycle
-        return true;
-    }
 
-    /**
-     * Synchronously returns the currently cached status bundle for the next module.
-     */
-    getCurrentModuleStatus() {
-        if (this.moduleRotation.length === 0) return null;
+        const statuses = [];
 
-        const moduleId = this.moduleRotation[this.currentRotationIndex];
-        const moduleData = this.modules.get(moduleId);
+        for (const [moduleId, mod] of this.modules.entries()) {
+            // Do not volunteer or ping quarantined modules
+            if (this.suspendedModules.has(moduleId)) continue;
 
-        this.currentRotationIndex = (this.currentRotationIndex + 1) % this.moduleRotation.length;
+            statuses.push({
+                moduleId,
+                port: mod.port,
+                state: mod.state,
+                errorCode: mod.errorCode || null
+            });
 
-        if (!moduleData) return null;
+            // Core's independent background check:
+            // Assume silent for the next volunteered payload unless a pong is received
+            // before the next heartbeat ping.
+            mod.state = 'SILENT';
+
+            // Asynchronously send a network ping to each module's port
+            this.transmit(mod.port, { action: "health_ping" })
+                .then(pong => {
+                    if (pong) {
+                        mod.state = 'HEALTHY';
+                        mod.errorCode = null;
+                    }
+                })
+                .catch(err => {
+                    // Map network failures to SILENT so the double-failure logic handles them uniformly
+                    mod.state = 'SILENT';
+                    mod.errorCode = err.message;
+                });
+        }
 
         return {
-            moduleId: moduleData.id,
-            port: moduleData.port,
-            state: moduleData.state || 'HEALTHY',
-            errorCode: moduleData.errorCode || null
+            alive: true,
+            statuses
         };
     }
 
     /**
-     * Halts message routing strictly to the target module and any module flagged as a critical dependency.
+     * Permanently isolates and quarantines the broken module and its dependencies.
+     */
+    quarantineModule(moduleId) {
+        this.suspendedModules.add(moduleId);
+
+        const moduleData = this.modules.get(moduleId);
+        if (moduleData && moduleData.dependencies) {
+            for (const depId of moduleData.dependencies) {
+                this.quarantineModule(depId);
+            }
+        }
+    }
+
+    /**
+     * Halts message routing strictly to the target module and any module that critically depends on it.
      */
     suspendCascade(moduleId) {
         this.suspendedModules.add(moduleId);
 
-        // Recursively suspend dependencies
-        const moduleData = this.modules.get(moduleId);
-        if (moduleData && moduleData.dependencies) {
-            for (const depId of moduleData.dependencies) {
-                this.suspendCascade(depId);
+        // Recursively suspend anything that depends on this module
+        for (const [otherId, otherData] of this.modules.entries()) {
+            if (otherData.dependencies && otherData.dependencies.includes(moduleId)) {
+                this.suspendCascade(otherId);
             }
         }
     }
@@ -82,13 +112,12 @@ class CoreRelay {
      * Reboots the target module, applying an optional temporal anchor.
      */
     restartModule(moduleId, anchor) {
-        // Mock clearing suspension from this module and its dependencies
+        // Mock clearing suspension from this module and anything that depends on it
         const clearSuspension = (mId) => {
             this.suspendedModules.delete(mId);
-            const mData = this.modules.get(mId);
-            if (mData && mData.dependencies) {
-                for (const depId of mData.dependencies) {
-                    clearSuspension(depId);
+            for (const [otherId, otherData] of this.modules.entries()) {
+                if (otherData.dependencies && otherData.dependencies.includes(mId)) {
+                    clearSuspension(otherId);
                 }
             }
         };
