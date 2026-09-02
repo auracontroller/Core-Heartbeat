@@ -1,0 +1,104 @@
+#include <iostream>
+#include <string>
+#include <thread>
+#include <chrono>
+#include <map>
+#include <mutex>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#define SOCKET int
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
+#define closesocket close
+#endif
+
+using namespace std;
+
+map<int, int> slilu_djica; // Tracks pact intervals (Dock ID -> Milliseconds)
+map<int, chrono::steady_clock::time_point> last_seen;
+mutex data_mutex;
+
+void listen_to_core(SOCKET sock) {
+    char buffer[1024];
+    string leftover = "";
+    while (true) {
+        int bytes = recv(sock, buffer, sizeof(buffer)-1, 0);
+        if (bytes <= 0) break;
+        buffer[bytes] = '\0';
+        leftover += buffer;
+
+        size_t pos;
+        while ((pos = leftover.find('\n')) != string::npos) {
+            string msg = leftover.substr(0, pos);
+            leftover = leftover.substr(pos + 1);
+
+            size_t from_pos = msg.find("FROM:");
+            size_t payload_pos = msg.find("|PAYLOAD:");
+            if (from_pos != string::npos && payload_pos != string::npos) {
+                int from_id = stoi(msg.substr(from_pos + 5, payload_pos - (from_pos + 5)));
+                string payload = msg.substr(payload_pos + 9);
+
+                lock_guard<mutex> lock(data_mutex);
+                if (payload.find("PACT:") == 0) {
+                    int interval = stoi(payload.substr(5));
+                    slilu_djica[from_id] = interval;
+                    last_seen[from_id] = chrono::steady_clock::now();
+                    cout << "Heartbeat: Pact established with Dock " << from_id << " at " << interval << "ms." << endl;
+                } else if (payload == "ALIVE") {
+                    last_seen[from_id] = chrono::steady_clock::now();
+                }
+            }
+        }
+    }
+}
+
+int main() {
+#ifdef _WIN32
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
+
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in server_addr = {};
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(5555);
+    inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
+    connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+
+    thread listener(listen_to_core, sock);
+    listener.detach();
+
+    cout << "Heartbeat active. Anchoring rhythm..." << endl;
+
+    while (true) {
+        // Send pulse to Sister (Dock 2) every 1000ms
+        string pulse_msg = "TARGET:2|PAYLOAD:PULSE\n";
+        send(sock, pulse_msg.c_str(), pulse_msg.length(), 0);
+        
+        {
+            lock_guard<mutex> lock(data_mutex);
+            auto now = chrono::steady_clock::now();
+            
+            // Check dynamic pacts
+            for (auto const& [dock_id, interval] : slilu_djica) {
+                auto elapsed = chrono::duration_cast<chrono::milliseconds>(now - last_seen[dock_id]).count();
+                if (elapsed > interval) {
+                    cout << "Heartbeat: Dock " << dock_id << " missed pact window! Sending SUSPEND." << endl;
+                    string suspend = "TARGET:" + to_string(dock_id) + "|PAYLOAD:SUSPEND\n";
+                    send(sock, suspend.c_str(), suspend.length(), 0);
+                }
+            }
+        }
+
+        this_thread::sleep_for(chrono::milliseconds(1000));
+    }
+    return 0;
+}
