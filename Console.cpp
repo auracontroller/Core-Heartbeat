@@ -37,7 +37,10 @@ int main() {
         return 1;
     }
 
-    cout << "Developer Console connected. Type commands (e.g. FORCE_CLOSE 5) or 'exit' to quit." << endl;
+    string identity = "TARGET:CORE|PAYLOAD:IAM:CONSOLE\n";
+    send(sock, identity.c_str(), static_cast<int>(identity.length()), 0);
+
+    cout << "Developer Console connected. Type commands (e.g. FORCE_CLOSE 5 or ADMIN_CLOSE SISTER) or 'exit' to quit." << endl;
 
     // Console expects manual input from stdin for testing
     string ciste_valsi;
@@ -45,9 +48,9 @@ int main() {
         if (ciste_valsi == "exit") {
             break;
         } else if (ciste_valsi == "FORCE_CLOSE" || ciste_valsi == "ADMIN_CLOSE") {
-            int target_dock;
+            string target_dock;
             cin >> target_dock;
-            string command = "TARGET:" + to_string(target_dock) + "|PAYLOAD:ADMIN_CLOSE\n";
+            string command = "TARGET:" + target_dock + "|PAYLOAD:ADMIN_CLOSE\n";
             send(sock, command.c_str(), static_cast<int>(command.length()), 0);
             cout << "Console: Sent ADMIN_CLOSE to Dock " << target_dock << endl;
         }

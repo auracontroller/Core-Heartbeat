@@ -37,16 +37,18 @@ int main() {
         return 1;
     }
 
+    string identity = "TARGET:CORE|PAYLOAD:IAM:TEST_PARSING\n";
+    send(sock, identity.c_str(), static_cast<int>(identity.length()), 0);
+
     cout << "TestParsing connected." << endl;
 
     // Send malformed packets
     string bad_msgs[] = {
-        "TARGET:1\n", // Missing PAYLOAD
+        "TARGET:HEARTBEAT\n", // Missing PAYLOAD
         "PAYLOAD:HELLO\n", // Missing TARGET
-        "TARGET:1|PAYLOAD:\n", // Empty payload
-        "TARGET:1|PAYLOAD:HELLO", // Missing newline
-        "TARGET:|PAYLOAD:HELLO\n", // Empty target
-        "TARGET:ABC|PAYLOAD:HELLO\n" // Non-integer target
+        "TARGET:HEARTBEAT|PAYLOAD:\n", // Empty payload
+        "TARGET:HEARTBEAT|PAYLOAD:HELLO", // Missing newline
+        "TARGET:|PAYLOAD:HELLO\n" // Empty target
     };
 
     for (const string& msg : bad_msgs) {
@@ -55,7 +57,7 @@ int main() {
     }
 
     // Send one more bad message that missing newline
-    string no_nl = "TARGET:1|PAYLOAD:NO_NEWLINE";
+    string no_nl = "TARGET:HEARTBEAT|PAYLOAD:NO_NEWLINE";
     send(sock, no_nl.c_str(), static_cast<int>(no_nl.length()), 0);
 
     cout << "TestParsing sent malformed packets." << endl;

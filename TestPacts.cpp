@@ -41,9 +41,12 @@ int main() {
             return 1;
         }
 
+        string identity = "TARGET:CORE|PAYLOAD:IAM:TEST_PACT_" + to_string(i) + "\n";
+        send(sockets[i], identity.c_str(), static_cast<int>(identity.length()), 0);
+
         // Setup pact intervals ranging from 2000 to 11000 ms
         int interval = 2000 + (i * 1000);
-        string pact = "TARGET:1|PAYLOAD:PACT:" + to_string(interval) + "\n";
+        string pact = "TARGET:HEARTBEAT|PAYLOAD:PACT:" + to_string(interval) + "\n";
         send(sockets[i], pact.c_str(), static_cast<int>(pact.length()), 0);
     }
 
@@ -54,7 +57,7 @@ int main() {
     while (chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - start).count() < 5) {
         this_thread::sleep_for(chrono::milliseconds(2100)); // Sleep just over 2000ms
         for (int i = 0; i < num_clients; ++i) {
-            string alive = "TARGET:1|PAYLOAD:ALIVE\n";
+            string alive = "TARGET:HEARTBEAT|PAYLOAD:ALIVE\n";
             send(sockets[i], alive.c_str(), static_cast<int>(alive.length()), 0);
         }
     }
