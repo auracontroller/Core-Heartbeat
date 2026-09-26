@@ -50,13 +50,13 @@ int main() {
     };
 
     for (const string& msg : bad_msgs) {
-        send(sock, msg.c_str(), msg.length(), 0);
+        send(sock, msg.c_str(), static_cast<int>(msg.length()), 0);
         this_thread::sleep_for(chrono::milliseconds(100));
     }
 
     // Send one more bad message that missing newline
     string no_nl = "TARGET:1|PAYLOAD:NO_NEWLINE";
-    send(sock, no_nl.c_str(), no_nl.length(), 0);
+    send(sock, no_nl.c_str(), static_cast<int>(no_nl.length()), 0);
 
     cout << "TestParsing sent malformed packets." << endl;
 

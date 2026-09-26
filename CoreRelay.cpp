@@ -19,9 +19,10 @@
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
 #define closesocket close
+#endif
+
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
-#endif
 #endif
 
 using namespace std;
@@ -89,7 +90,7 @@ void handle_client(int dock_id, SOCKET client_socket) {
                     }
                     lock.unlock(); // Release lock before network I/O
                     for (SOCKET sock : target_sockets) {
-                        send(sock, forwarded_message.c_str(), forwarded_message.length(), MSG_NOSIGNAL);
+                        send(sock, forwarded_message.c_str(), static_cast<int>(forwarded_message.length()), MSG_NOSIGNAL);
                     }
                 } else {
                     SOCKET target_socket = INVALID_SOCKET;
@@ -102,7 +103,7 @@ void handle_client(int dock_id, SOCKET client_socket) {
                     lock.unlock(); // Release lock before network I/O
 
                     if (target_socket != INVALID_SOCKET) {
-                        send(target_socket, forwarded_message.c_str(), forwarded_message.length(), MSG_NOSIGNAL);
+                        send(target_socket, forwarded_message.c_str(), static_cast<int>(forwarded_message.length()), MSG_NOSIGNAL);
                     }
                 }
             }
@@ -149,12 +150,12 @@ int main() {
 
         cout << "Core: Dock " << current_dock_id << " connected." << endl;
         string welcome_msg = "DOCK:" + to_string(current_dock_id) + "\n";
-        send(client_socket, welcome_msg.c_str(), welcome_msg.length(), 0);
+        send(client_socket, welcome_msg.c_str(), static_cast<int>(welcome_msg.length()), 0);
 
         // Notify Heartbeat (Dock 1) of new connections
         if (current_dock_id > 1) {
             string alert = "TARGET:1|PAYLOAD:NEW_DOCK:" + to_string(current_dock_id) + "\n";
-            send(midju_vreji[1], alert.c_str(), alert.length(), 0);
+            send(midju_vreji[1], alert.c_str(), static_cast<int>(alert.length()), 0);
         }
 
         thread t(handle_client, current_dock_id, client_socket);

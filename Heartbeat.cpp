@@ -64,7 +64,7 @@ void listen_to_core(SOCKET sock) {
                         auto delta = chrono::duration_cast<chrono::milliseconds>(now - last_seen[from_id]).count();
                         if (delta < 2000 && payload.find("PACT:") != 0) {
                             string lock_cmd = "TARGET:CORE|PAYLOAD:LOCK_DOCK:" + to_string(from_id) + "\n";
-                            send(sock, lock_cmd.c_str(), lock_cmd.length(), 0);
+                            send(sock, lock_cmd.c_str(), static_cast<int>(lock_cmd.length()), 0);
                             cout << "Heartbeat: Spam detected from Dock " << from_id << " (" << delta << "ms). Locking dock." << endl;
                         }
                     }
@@ -102,7 +102,7 @@ int main() {
     while (true) {
         // Send pulse to Sister (Dock 2) every 1000ms
         string pulse_msg = "TARGET:2|PAYLOAD:PULSE\n";
-        send(sock, pulse_msg.c_str(), pulse_msg.length(), 0);
+        send(sock, pulse_msg.c_str(), static_cast<int>(pulse_msg.length()), 0);
 
         auto pulse_start = chrono::steady_clock::now();
 
@@ -143,14 +143,14 @@ int main() {
 
             if (trigger_global_freeze) {
                 string suspend_all = "TARGET:ALL|PAYLOAD:SUSPEND_ALL\n";
-                send(sock, suspend_all.c_str(), suspend_all.length(), 0);
+                send(sock, suspend_all.c_str(), static_cast<int>(suspend_all.length()), 0);
                 // In a real scenario, this might halt Heartbeat entirely. For test, we just broadcast.
             }
         }
 
         auto pulse_end = chrono::steady_clock::now();
         auto processing_time = chrono::duration_cast<chrono::milliseconds>(pulse_end - pulse_start).count();
-        int sleep_time = 1000 - processing_time;
+        int sleep_time = 1000 - static_cast<int>(processing_time);
         if (sleep_time > 0) {
             this_thread::sleep_for(chrono::milliseconds(sleep_time));
         }

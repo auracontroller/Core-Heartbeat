@@ -48,7 +48,7 @@ int main() {
             int target_dock;
             cin >> target_dock;
             string command = "TARGET:" + to_string(target_dock) + "|PAYLOAD:ADMIN_CLOSE\n";
-            send(sock, command.c_str(), command.length(), 0);
+            send(sock, command.c_str(), static_cast<int>(command.length()), 0);
             cout << "Console: Sent ADMIN_CLOSE to Dock " << target_dock << endl;
         }
     }

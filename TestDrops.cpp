@@ -44,7 +44,7 @@ int main() {
         struct linger sl;
         sl.l_onoff = 1;
         sl.l_linger = 0;
-        setsockopt(sock, SOL_SOCKET, SO_LINGER, &sl, sizeof(sl));
+        setsockopt(sock, SOL_SOCKET, SO_LINGER, reinterpret_cast<const char*>(&sl), sizeof(sl));
 
         closesocket(sock);
     }

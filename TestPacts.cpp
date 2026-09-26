@@ -44,7 +44,7 @@ int main() {
         // Setup pact intervals ranging from 2000 to 11000 ms
         int interval = 2000 + (i * 1000);
         string pact = "TARGET:1|PAYLOAD:PACT:" + to_string(interval) + "\n";
-        send(sockets[i], pact.c_str(), pact.length(), 0);
+        send(sockets[i], pact.c_str(), static_cast<int>(pact.length()), 0);
     }
 
     cout << "TestPacts established " << num_clients << " pacts." << endl;
@@ -55,7 +55,7 @@ int main() {
         this_thread::sleep_for(chrono::milliseconds(2100)); // Sleep just over 2000ms
         for (int i = 0; i < num_clients; ++i) {
             string alive = "TARGET:1|PAYLOAD:ALIVE\n";
-            send(sockets[i], alive.c_str(), alive.length(), 0);
+            send(sockets[i], alive.c_str(), static_cast<int>(alive.length()), 0);
         }
     }
 

@@ -28,7 +28,7 @@ void receive_loop() {
     while (true) {
         int bytes = recv(core_sock, buffer, sizeof(buffer)-1, 0);
         if (bytes <= 0) exit(0);
-        
+
         buffer[bytes] = '\0';
         leftover += buffer;
 
@@ -40,10 +40,10 @@ void receive_loop() {
             if (msg.find("PAYLOAD:PULSE") != string::npos) {
                 lock_guard<mutex> lock(data_mutex);
                 last_heartbeat_time = chrono::steady_clock::now();
-                
+
                 // Immediately return the loop
                 string reply = "TARGET:1|PAYLOAD:YES\n";
-                send(core_sock, reply.c_str(), reply.length(), 0);
+                send(core_sock, reply.c_str(), static_cast<int>(reply.length()), 0);
             }
         }
     }
@@ -79,8 +79,8 @@ int main() {
         if (elapsed > 1500) {
             cout << "Sister: Heartbeat silent! Executing SUSPEND_ALL." << endl;
             string suspend = "TARGET:ALL|PAYLOAD:SUSPEND_ALL\n";
-            send(core_sock, suspend.c_str(), suspend.length(), 0);
-            
+            send(core_sock, suspend.c_str(), static_cast<int>(suspend.length()), 0);
+
             // Wait to prevent spamming
             this_thread::sleep_for(chrono::milliseconds(5000));
         }

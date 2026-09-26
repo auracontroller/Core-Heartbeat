@@ -73,7 +73,7 @@ DOCK_ID=$(grep -o "Assigned Dock ID: [0-9]*" dummy2_console.log | cut -d' ' -f4 
 if [ -n "$DOCK_ID" ]; then
     echo "Dummy 2 connected on Dock $DOCK_ID. Sending ADMIN_CLOSE via Console..."
     # using echo directly to send standard input commands to Console executable
-    echo -e "ADMIN_CLOSE\n$DOCK_ID\nexit\n" | ./Console > console_test.log 2>&1
+    echo -e "ADMIN_CLOSE\n$DOCK_ID\nquit\n" | ./Console > console_test.log 2>&1
     sleep 2
     if ps -p $DUMMY2_PID > /dev/null; then
         echo "[FAIL] Dummy 2 is still running after ADMIN_CLOSE."
