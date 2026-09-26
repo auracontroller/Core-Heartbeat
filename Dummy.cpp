@@ -44,18 +44,18 @@ SOCKET connect_to_core(int& my_port_id, int mode) {
     if (bytes_read > 0) {
         buffer[bytes_read] = '\0';
         string welcome(buffer);
-        size_t pos = welcome.find("PORT:");
+        size_t pos = welcome.find("DOCK:");
         if (pos != string::npos) {
             size_t end_pos = welcome.find('\n', pos);
             if (end_pos != string::npos) {
                 my_port_id = stoi(welcome.substr(pos + 5, end_pos - (pos + 5)));
-                cout << "Dummy connected to CoreRelay. Assigned Port ID: " << my_port_id << endl << flush;
+                cout << "Dummy connected to CoreRelay. Assigned Dock ID: " << my_port_id << endl << flush;
             }
         }
     }
 
     string identity = "I_AM_MODULE_DUMMY_" + to_string(mode) + "\n";
-    send(sock, identity.c_str(), identity.length(), 0);
+    send(sock, identity.c_str(), static_cast<int>(identity.length()), 0);
 
     return sock;
 }
@@ -89,6 +89,7 @@ int main(int argc, char* argv[]) {
     bool is_suspended = false;
     int suspended_pulse_count = 0;
     bool has_crashed = false; // specifically for Dummy 1
+    bool is_muted = false; // Client-side mute flag
 
     char buffer[4096];
     string leftover = "";
@@ -115,7 +116,18 @@ int main(int argc, char* argv[]) {
                 int sender_id = stoi(message.substr(from_pos + 5, payload_pos - (from_pos + 5)));
                 string payload = message.substr(payload_pos + 9);
 
-                if (payload == "PULSE") {
+                if (payload == "ADMIN_CLOSE") {
+                    cout << "Dummy " << mode << ": Received ADMIN_CLOSE. Sending INTENTIONAL_SHUTDOWN to Heartbeat and terminating." << endl << flush;
+                    string shutdown_msg = "TARGET:1|PAYLOAD:INTENTIONAL_SHUTDOWN\n";
+                    send(sock, shutdown_msg.c_str(), static_cast<int>(shutdown_msg.length()), 0);
+                    closesocket(sock);
+                    exit(0);
+                }
+
+                if (payload == "SUSPEND_OUTPUT") {
+                    cout << "Dummy " << mode << ": Received SUSPEND_OUTPUT. Muting outgoing transmissions." << endl << flush;
+                    is_muted = true;
+                } else if (payload == "PULSE") {
                     if (is_suspended) {
                         cout << "Dummy " << mode << ": Received normal PULSE. Auto-resetting suspension state." << endl << flush;
                         is_suspended = false;
@@ -126,15 +138,17 @@ int main(int argc, char* argv[]) {
                     }
 
                     if (mode == 1) {
-                        if (!has_crashed) {
+                        if (!has_crashed && !is_muted) {
                             string msg = "TARGET:" + to_string(sender_id) + "|PAYLOAD:ALIVE\n";
-                            send(sock, msg.c_str(), msg.length(), 0);
+                            send(sock, msg.c_str(), static_cast<int>(msg.length()), 0);
                             has_crashed = true;
                         }
                         // If has_crashed is true, return nothing
                     } else if (mode == 2 || mode == 3) {
-                        string msg = "TARGET:" + to_string(sender_id) + "|PAYLOAD:ALIVE\n";
-                        send(sock, msg.c_str(), msg.length(), 0);
+                        if (!is_muted) {
+                            string msg = "TARGET:" + to_string(sender_id) + "|PAYLOAD:ALIVE\n";
+                            send(sock, msg.c_str(), static_cast<int>(msg.length()), 0);
+                        }
                     }
                 } else if (payload == "SUSPEND_ALL") {
                     if (!is_suspended) {
@@ -145,18 +159,18 @@ int main(int argc, char* argv[]) {
 
                     if (mode == 1) {
                         string msg = "TARGET:" + to_string(sender_id) + "|PAYLOAD:ALREADY_SUSPENDED\n";
-                        send(sock, msg.c_str(), msg.length(), 0);
+                        send(sock, msg.c_str(), static_cast<int>(msg.length()), 0);
                     } else if (mode == 2) {
                         string msg = "TARGET:" + to_string(sender_id) + "|PAYLOAD:ALREADY_SUSPENDED\n";
-                        send(sock, msg.c_str(), msg.length(), 0);
+                        send(sock, msg.c_str(), static_cast<int>(msg.length()), 0);
                     } else if (mode == 3) {
                         suspended_pulse_count++;
                         string msg1 = "TARGET:" + to_string(sender_id) + "|PAYLOAD:UNSUSPENDABLE\n";
-                        send(sock, msg1.c_str(), msg1.length(), 0);
+                        send(sock, msg1.c_str(), static_cast<int>(msg1.length()), 0);
 
                         if (suspended_pulse_count == 2) {
                             string msg2 = "TARGET:" + to_string(sender_id) + "|PAYLOAD:RESUME\n";
-                            send(sock, msg2.c_str(), msg2.length(), 0);
+                            send(sock, msg2.c_str(), static_cast<int>(msg2.length()), 0);
                             cout << "Dummy 3: Issued RESUME command." << endl << flush;
                         }
                     }
