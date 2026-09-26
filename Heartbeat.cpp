@@ -94,10 +94,16 @@ void listen_to_core(SOCKET sock) {
                     auto now = chrono::steady_clock::now();
                     bool is_sister = dock_roles.count(from_id) && dock_roles[from_id] == "SISTER";
 
-                    if (!is_sister && payload != "YES") {
+                    bool is_lifecycle = (payload == "YES" ||
+                                         payload == "ALREADY_SUSPENDED" ||
+                                         payload == "UNSUSPENDABLE" ||
+                                         payload == "INTENTIONAL_SHUTDOWN" ||
+                                         payload.find("PACT:") == 0);
+
+                    if (!is_sister && !is_lifecycle) {
                         if (last_seen.find(from_id) != last_seen.end()) {
                             auto delta = chrono::duration_cast<chrono::milliseconds>(now - last_seen[from_id]).count();
-                            if (delta < 2000 && payload.find("PACT:") != 0) {
+                            if (delta < 2000) {
                                 string lock_cmd = "TARGET:CORE|PAYLOAD:LOCK_DOCK:" + to_string(from_id) + "\n";
                                 send(sock, lock_cmd.c_str(), static_cast<int>(lock_cmd.length()), 0);
                                 cout << "Heartbeat: Spam detected from Dock " << from_id << " (" << delta << "ms). Locking dock." << endl;
@@ -139,6 +145,8 @@ int main() {
 
     cout << "Heartbeat active. Anchoring rhythm..." << endl;
 
+    bool global_freeze_broadcasted = false;
+
     while (true) {
         // Send pulse to Sister (Dock 2) every 1000ms
         string pulse_msg = "TARGET:SISTER|PAYLOAD:PULSE\n";
@@ -175,17 +183,17 @@ int main() {
                     auto elapsed = chrono::duration_cast<chrono::milliseconds>(now - last_seen[dock_id]).count();
                     // If it misses its interval a second time (meaning elapsed > 2 * interval)
                     if (elapsed > (2 * interval)) {
-                        cout << "Heartbeat: Dock " << dock_id << " missed pact window twice! Broadcasting SUSPEND_ALL." << endl;
                         trigger_global_freeze = true;
                         break;
                     }
                 }
             }
 
-            if (trigger_global_freeze) {
+            if (trigger_global_freeze && !global_freeze_broadcasted) {
+                cout << "Heartbeat: Dock missed pact window twice! Broadcasting SUSPEND_ALL." << endl;
                 string suspend_all = "TARGET:ALL|PAYLOAD:SUSPEND_ALL\n";
                 send(sock, suspend_all.c_str(), static_cast<int>(suspend_all.length()), 0);
-                // In a real scenario, this might halt Heartbeat entirely. For test, we just broadcast.
+                global_freeze_broadcasted = true;
             }
         }
 
