@@ -101,6 +101,12 @@ else
 fi
 
 echo "==================================="
+
+if grep -Eiq "No such file or directory|command not found|failed to execute" *.log; then
+    echo "[FATAL] Test harness captured shell execution errors in log files!"
+    grep -Ein "No such file or directory|command not found" *.log
+fi
+
 echo "Cleaning up..."
 kill -9 $RELAY_PID
 pkill -f Sister
