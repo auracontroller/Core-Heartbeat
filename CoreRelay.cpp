@@ -78,21 +78,32 @@ void handle_client(int dock_id, SOCKET client_socket) {
                 }
 
                 string forwarded_message = "FROM:" + to_string(dock_id) + "|" + message.substr(target_pos) + "\n";
-                lock_guard<mutex> lock(clients_mutex);
+                unique_lock<mutex> lock(clients_mutex);
 
                 if (target_str == "ALL") {
+                    vector<SOCKET> target_sockets;
                     for (auto const& [id, sock] : midju_vreji) {
                         if (id != dock_id) {
-                            send(sock, forwarded_message.c_str(), forwarded_message.length(), MSG_NOSIGNAL);
+                            target_sockets.push_back(sock);
                         }
                     }
+                    lock.unlock(); // Release lock before network I/O
+                    for (SOCKET sock : target_sockets) {
+                        send(sock, forwarded_message.c_str(), forwarded_message.length(), MSG_NOSIGNAL);
+                    }
                 } else {
+                    SOCKET target_socket = INVALID_SOCKET;
                     try {
                         int target_id = stoi(target_str);
                         if (midju_vreji.find(target_id) != midju_vreji.end()) {
-                            send(midju_vreji[target_id], forwarded_message.c_str(), forwarded_message.length(), MSG_NOSIGNAL);
+                            target_socket = midju_vreji[target_id];
                         }
                     } catch (...) {}
+                    lock.unlock(); // Release lock before network I/O
+
+                    if (target_socket != INVALID_SOCKET) {
+                        send(target_socket, forwarded_message.c_str(), forwarded_message.length(), MSG_NOSIGNAL);
+                    }
                 }
             }
         }

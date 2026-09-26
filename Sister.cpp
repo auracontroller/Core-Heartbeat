@@ -75,8 +75,8 @@ int main() {
         auto now = chrono::steady_clock::now();
         auto elapsed = chrono::duration_cast<chrono::milliseconds>(now - last_heartbeat_time).count();
 
-        // 1000ms absolute limit
-        if (elapsed > 1000) {
+        // 1500ms absolute limit (prevents thread dispatch jitter)
+        if (elapsed > 1500) {
             cout << "Sister: Heartbeat silent! Executing SUSPEND_ALL." << endl;
             string suspend = "TARGET:ALL|PAYLOAD:SUSPEND_ALL\n";
             send(core_sock, suspend.c_str(), suspend.length(), 0);
