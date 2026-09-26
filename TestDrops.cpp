@@ -39,6 +39,9 @@ int main() {
             continue;
         }
 
+        string identity = "TARGET:CORE|PAYLOAD:IAM:TEST_DROP_" + to_string(i) + "\n";
+        send(sock, identity.c_str(), static_cast<int>(identity.length()), 0);
+
         // Abruptly close it immediately
         // By turning on linger with 0 timeout, close() sends a RST instead of FIN
         struct linger sl;

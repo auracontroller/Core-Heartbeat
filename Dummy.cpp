@@ -54,7 +54,7 @@ SOCKET connect_to_core(int& my_port_id, int mode) {
         }
     }
 
-    string identity = "I_AM_MODULE_DUMMY_" + to_string(mode) + "\n";
+    string identity = "TARGET:CORE|PAYLOAD:IAM:DUMMY_" + to_string(mode) + "\n";
     send(sock, identity.c_str(), static_cast<int>(identity.length()), 0);
 
     return sock;
@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
 
                 if (payload == "ADMIN_CLOSE") {
                     cout << "Dummy " << mode << ": Received ADMIN_CLOSE. Sending INTENTIONAL_SHUTDOWN to Heartbeat and terminating." << endl << flush;
-                    string shutdown_msg = "TARGET:1|PAYLOAD:INTENTIONAL_SHUTDOWN\n";
+                    string shutdown_msg = "TARGET:HEARTBEAT|PAYLOAD:INTENTIONAL_SHUTDOWN\n";
                     send(sock, shutdown_msg.c_str(), static_cast<int>(shutdown_msg.length()), 0);
                     closesocket(sock);
                     exit(0);

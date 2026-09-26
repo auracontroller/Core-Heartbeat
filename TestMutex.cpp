@@ -38,10 +38,13 @@ int main() {
         return 1;
     }
 
+    string identity = "TARGET:CORE|PAYLOAD:IAM:TEST_MUTEX\n";
+    send(sock, identity.c_str(), static_cast<int>(identity.length()), 0);
+
     cout << "TestMutex connected." << endl;
 
     // Set up a pact
-    string pact = "TARGET:1|PAYLOAD:PACT:5000\n";
+    string pact = "TARGET:HEARTBEAT|PAYLOAD:PACT:5000\n";
     send(sock, pact.c_str(), static_cast<int>(pact.length()), 0);
 
     // Spam ALIVE messages to trigger the < 2000ms Throttle rule
@@ -71,7 +74,7 @@ int main() {
         }
 
         if (!is_muted && count < 100) {
-            string alive = "TARGET:1|PAYLOAD:ALIVE\n";
+            string alive = "TARGET:HEARTBEAT|PAYLOAD:ALIVE\n";
             send(sock, alive.c_str(), static_cast<int>(alive.length()), 0);
             count++;
             this_thread::sleep_for(chrono::milliseconds(100)); // Spam frequently

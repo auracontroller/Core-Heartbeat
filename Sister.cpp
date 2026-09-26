@@ -42,8 +42,13 @@ void receive_loop() {
                 last_heartbeat_time = chrono::steady_clock::now();
 
                 // Immediately return the loop
-                string reply = "TARGET:1|PAYLOAD:YES\n";
+                string reply = "TARGET:HEARTBEAT|PAYLOAD:YES\n";
                 send(core_sock, reply.c_str(), static_cast<int>(reply.length()), 0);
+            } else if (msg.find("PAYLOAD:ADMIN_CLOSE") != string::npos) {
+                cout << "Sister: Received ADMIN_CLOSE. Sending INTENTIONAL_SHUTDOWN to Heartbeat and terminating." << endl;
+                string reply = "TARGET:HEARTBEAT|PAYLOAD:INTENTIONAL_SHUTDOWN\n";
+                send(core_sock, reply.c_str(), static_cast<int>(reply.length()), 0);
+                exit(0);
             }
         }
     }
@@ -61,6 +66,9 @@ int main() {
     server_addr.sin_port = htons(5555);
     inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
     connect(core_sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+
+    string identity = "TARGET:CORE|PAYLOAD:IAM:SISTER\n";
+    send(core_sock, identity.c_str(), static_cast<int>(identity.length()), 0);
 
     last_heartbeat_time = chrono::steady_clock::now();
     thread recv_thread(receive_loop);

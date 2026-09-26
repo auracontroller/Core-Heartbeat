@@ -29,6 +29,8 @@ using namespace std;
 
 mutex clients_mutex;
 map<int, SOCKET> midju_vreji; // Core registry
+map<string, int> role_to_dock;
+map<int, string> dock_to_role;
 int next_dock_id = 1;
 
 map<int, bool> locked_docks;
@@ -59,7 +61,19 @@ void handle_client(int dock_id, SOCKET client_socket) {
 
                 // Mail Slot Logic
                 if (target_str == "CORE") {
-                    if (payload_str.find("LOCK_DOCK:") == 0) {
+                    if (payload_str.find("IAM:") == 0) {
+                        string role = payload_str.substr(4);
+                        lock_guard<mutex> lock(clients_mutex);
+                        role_to_dock[role] = dock_id;
+                        dock_to_role[dock_id] = role;
+                        cout << "Core: Dock " << dock_id << " registered as " << role << endl;
+
+                        // Tell Heartbeat about the IAM registration so it tracks roles
+                        if (role_to_dock.find("HEARTBEAT") != role_to_dock.end() && role != "HEARTBEAT") {
+                            string alert = "FROM:" + to_string(dock_id) + "|PAYLOAD:IAM:" + role + "\n";
+                            send(midju_vreji[role_to_dock["HEARTBEAT"]], alert.c_str(), static_cast<int>(alert.length()), MSG_NOSIGNAL);
+                        }
+                    } else if (payload_str.find("LOCK_DOCK:") == 0) {
                         try {
                             int lock_id = stoi(payload_str.substr(10));
                             lock_guard<mutex> lock(clients_mutex);
@@ -88,18 +102,28 @@ void handle_client(int dock_id, SOCKET client_socket) {
                             target_sockets.push_back(sock);
                         }
                     }
+                    cout << "Core: Routing from Dock " << dock_id << " to ALL" << endl;
                     lock.unlock(); // Release lock before network I/O
                     for (SOCKET sock : target_sockets) {
                         send(sock, forwarded_message.c_str(), static_cast<int>(forwarded_message.length()), MSG_NOSIGNAL);
                     }
                 } else {
                     SOCKET target_socket = INVALID_SOCKET;
-                    try {
-                        int target_id = stoi(target_str);
-                        if (midju_vreji.find(target_id) != midju_vreji.end()) {
-                            target_socket = midju_vreji[target_id];
-                        }
-                    } catch (...) {}
+                    if (role_to_dock.find(target_str) != role_to_dock.end()) {
+                        target_socket = midju_vreji[role_to_dock[target_str]];
+                    } else {
+                        try {
+                            int target_id = stoi(target_str);
+                            if (midju_vreji.find(target_id) != midju_vreji.end()) {
+                                target_socket = midju_vreji[target_id];
+                            }
+                        } catch (...) {}
+                    }
+
+                    if (target_socket != INVALID_SOCKET) {
+                        cout << "Core: Routing from Dock " << dock_id << " to " << target_str << endl;
+                    }
+
                     lock.unlock(); // Release lock before network I/O
 
                     if (target_socket != INVALID_SOCKET) {

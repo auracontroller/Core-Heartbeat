@@ -5,6 +5,7 @@
 #include <map>
 #include <mutex>
 #include <vector>
+#include <fstream>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -26,7 +27,29 @@ using namespace std;
 map<int, int> active_ledger;
 map<int, int> suspended_ledger;
 map<int, chrono::steady_clock::time_point> last_seen;
+map<int, string> dock_roles;
 mutex data_mutex;
+
+void export_ledger_unsafe() {
+    ofstream file("heartbeat_ledger.md");
+    if (!file.is_open()) return;
+
+    file << "# Heartbeat System State Ledger\n";
+    file << "Dock ID | Role | Status | Pact Window | Last Seen (ms ago)\n";
+
+    auto now = chrono::steady_clock::now();
+    for (auto const& [dock_id, interval] : active_ledger) {
+        string role = dock_roles.count(dock_id) ? dock_roles[dock_id] : "UNKNOWN";
+        int elapsed = last_seen.count(dock_id) ? chrono::duration_cast<chrono::milliseconds>(now - last_seen[dock_id]).count() : 0;
+        file << dock_id << " | " << role << " | ACTIVE | " << interval << " | " << elapsed << "\n";
+    }
+
+    for (auto const& [dock_id, interval] : suspended_ledger) {
+        string role = dock_roles.count(dock_id) ? dock_roles[dock_id] : "UNKNOWN";
+        int elapsed = last_seen.count(dock_id) ? chrono::duration_cast<chrono::milliseconds>(now - last_seen[dock_id]).count() : 0;
+        file << dock_id << " | " << role << " | SUSPENDED | " << interval << " | " << elapsed << "\n";
+    }
+}
 
 void listen_to_core(SOCKET sock) {
     char buffer[1024];
@@ -51,21 +74,34 @@ void listen_to_core(SOCKET sock) {
 
                     lock_guard<mutex> lock(data_mutex);
 
+                    if (payload.find("IAM:") == 0) {
+                        string role = payload.substr(4);
+                        dock_roles[from_id] = role;
+                        export_ledger_unsafe();
+                        continue;
+                    }
+
                     if (payload == "INTENTIONAL_SHUTDOWN") {
                         active_ledger.erase(from_id);
                         suspended_ledger.erase(from_id);
                         last_seen.erase(from_id);
+                        dock_roles.erase(from_id);
                         cout << "Heartbeat: Total Amnesia enacted for Dock " << from_id << endl;
+                        export_ledger_unsafe();
                         continue;
                     }
 
                     auto now = chrono::steady_clock::now();
-                    if (last_seen.find(from_id) != last_seen.end()) {
-                        auto delta = chrono::duration_cast<chrono::milliseconds>(now - last_seen[from_id]).count();
-                        if (delta < 2000 && payload.find("PACT:") != 0) {
-                            string lock_cmd = "TARGET:CORE|PAYLOAD:LOCK_DOCK:" + to_string(from_id) + "\n";
-                            send(sock, lock_cmd.c_str(), static_cast<int>(lock_cmd.length()), 0);
-                            cout << "Heartbeat: Spam detected from Dock " << from_id << " (" << delta << "ms). Locking dock." << endl;
+                    bool is_sister = dock_roles.count(from_id) && dock_roles[from_id] == "SISTER";
+
+                    if (!is_sister && payload != "YES") {
+                        if (last_seen.find(from_id) != last_seen.end()) {
+                            auto delta = chrono::duration_cast<chrono::milliseconds>(now - last_seen[from_id]).count();
+                            if (delta < 2000 && payload.find("PACT:") != 0) {
+                                string lock_cmd = "TARGET:CORE|PAYLOAD:LOCK_DOCK:" + to_string(from_id) + "\n";
+                                send(sock, lock_cmd.c_str(), static_cast<int>(lock_cmd.length()), 0);
+                                cout << "Heartbeat: Spam detected from Dock " << from_id << " (" << delta << "ms). Locking dock." << endl;
+                            }
                         }
                     }
                     last_seen[from_id] = now;
@@ -74,6 +110,7 @@ void listen_to_core(SOCKET sock) {
                         int interval = stoi(payload.substr(5));
                         active_ledger[from_id] = interval;
                         cout << "Heartbeat: Pact established with Dock " << from_id << " at " << interval << "ms." << endl;
+                        export_ledger_unsafe();
                     }
                 } catch (...) {}
             }
@@ -94,6 +131,9 @@ int main() {
     inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
     connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
 
+    string identity = "TARGET:CORE|PAYLOAD:IAM:HEARTBEAT\n";
+    send(sock, identity.c_str(), static_cast<int>(identity.length()), 0);
+
     thread listener(listen_to_core, sock);
     listener.detach();
 
@@ -101,7 +141,7 @@ int main() {
 
     while (true) {
         // Send pulse to Sister (Dock 2) every 1000ms
-        string pulse_msg = "TARGET:2|PAYLOAD:PULSE\n";
+        string pulse_msg = "TARGET:SISTER|PAYLOAD:PULSE\n";
         send(sock, pulse_msg.c_str(), static_cast<int>(pulse_msg.length()), 0);
 
         auto pulse_start = chrono::steady_clock::now();
@@ -126,6 +166,7 @@ int main() {
                 suspended_ledger[dock_id] = active_ledger[dock_id];
                 active_ledger.erase(dock_id);
             }
+            if (!to_suspend.empty()) export_ledger_unsafe();
 
             // Check Suspended Ledger for Global Freeze
             bool trigger_global_freeze = false;
